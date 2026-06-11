@@ -111,7 +111,7 @@
   <header class="topbar">
     <a class="brand" href="/" aria-label="KriolLang">
       <img src={logoUrl} alt="" />
-      <span>KriolLang</span>
+      <span>Kriol</span>
     </a>
 
     <nav class="nav-actions" aria-label="Project links">
@@ -136,7 +136,7 @@
     <div class="editor-pane">
       <div class="bar">
         <div>
-          <h1>Kriol Playground</h1>
+          <h1>Playground</h1>
         </div>
 
         <div class="actions">
@@ -152,7 +152,7 @@
       <div class="editor-frame">
         <div class="pane-bar">
           <div class="traffic" aria-hidden="true"><span></span><span></span><span></span></div>
-          <strong>programa.kriol</strong>
+          <strong>kodigu.kriol</strong>
         </div>
         <KriolEditor bind:value={source} />
       </div>
