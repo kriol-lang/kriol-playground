@@ -1,5 +1,5 @@
 ARG UBUNTU_TAG=resolute
-ARG KRIOL_COMPILER_URL=https://github.com/kriol-lang/kriol/releases/download/v1.7.8-alpha%2Bbuild2/kriol-v1.7.8-alpha+build2-linux-x86_64.tar.xz
+ARG KRIOL_COMPILER_URL=https://github.com/kriol-lang/kriol/releases/download/v1.7.8-beta%2Bbuild2/kriol-v1.7.8-beta+build2-linux-x86_64.tar.xz
 
 FROM ubuntu:${UBUNTU_TAG} AS build
 

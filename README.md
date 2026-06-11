@@ -31,10 +31,8 @@ Build the deploy image from this project directory. The compiler is downloaded
 from a release tarball and smoke-tested during the image build:
 
 ```sh
-docker build \
-  --build-arg KRIOL_COMPILER_URL='https://github.com/kriol-lang/kriol/releases/download/v1.7.8-alpha%2Bbuild2/kriol-v1.7.8-alpha+build2-linux-x86_64.tar.xz' \
-  -t kriol-playground .
-docker run --rm -p 3000:3000 kriol-playground
+docker build -t kriol-play .
+docker run --rm -p 3000:3000 kriol-play
 ```
 
 The image runs the web app as an unprivileged user. Compile requests are queued,
@@ -44,13 +42,10 @@ To run the same container setup in dev mode, build the `dev` target and expose
 Vite's dev-server port:
 
 ```sh
-docker build \
-  --target dev \
-  --build-arg KRIOL_COMPILER_URL='https://github.com/kriol-lang/kriol/releases/download/v1.7.8-alpha%2Bbuild2/kriol-v1.7.8-alpha+build2-linux-x86_64.tar.xz' \
-  -t kriol-playground-dev .
-docker run --rm -p 5173:5173 kriol-playground-dev
+docker build --target dev -t kriol-play-dev .
+docker run --rm -p 5173:5173 kriol-play-dev
 ```
-
+~
 Open `http://localhost:5173`. Because this runs `npm run dev`, the compile API
 uses SvelteKit dev mode and does not enforce the production origin guard.
 
