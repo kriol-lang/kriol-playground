@@ -23,6 +23,7 @@
     "web-tree-sitter": "^0.25.8"
   },
   "devDependencies": {
+    "@types/node": "^25.9.3",
     "svelte-check": "^4.1.1",
     "typescript": "^5.7.2"
   }
