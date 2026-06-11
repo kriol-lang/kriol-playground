@@ -13,18 +13,6 @@ npm install
 npm run dev
 ```
 
-By default the backend looks for:
-
-```sh
-../kriol/build/kriol
-```
-
-Override it with:
-
-```sh
-KRIOL_BIN=/path/to/kriol npm run dev
-```
-
 Useful queue knobs:
 
 ```sh
