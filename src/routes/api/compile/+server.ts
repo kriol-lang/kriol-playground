@@ -1,10 +1,12 @@
 import { json } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { enqueueCompile } from '$lib/server/compileQueue';
+import { checkCompileRateLimit } from '$lib/server/rateLimit';
 import type { CompileRequest } from '$lib/compiler/types';
 import type { RequestHandler } from './$types';
 
 const MAX_SOURCE_BYTES = Number(process.env.KRIOL_MAX_SOURCE_BYTES ?? 128 * 1024);
+const ENABLE_RATE_LIMIT = process.env.KRIOL_COMPILE_RATE_LIMIT !== 'false';
 const ALLOWED_ORIGINS = (process.env.KRIOL_ALLOWED_ORIGINS ?? 'https://play.kriol.dev')
   .split(',')
   .map((origin) => origin.trim())
@@ -38,6 +40,23 @@ function forbiddenResponse() {
   );
 }
 
+function throttledResponse(retryAfterSeconds: number) {
+  return json(
+    {
+      ok: false,
+      mode: 'backend',
+      diagnostics: ['Too many compile requests. Please wait a moment and try again.'],
+      elapsedMs: 0
+    },
+    {
+      status: 429,
+      headers: {
+        'Retry-After': String(retryAfterSeconds)
+      }
+    }
+  );
+}
+
 export const OPTIONS: RequestHandler = async ({ request }) => {
   if (!isAllowedRequest(request))
     return forbiddenResponse();
@@ -45,9 +64,15 @@ export const OPTIONS: RequestHandler = async ({ request }) => {
   return new Response(null, { status: 204 });
 };
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   if (!isAllowedRequest(request))
     return forbiddenResponse();
+
+  if (ENABLE_RATE_LIMIT) {
+    const rateLimit = checkCompileRateLimit(getClientAddress());
+    if (!rateLimit.allowed)
+      return throttledResponse(rateLimit.retryAfterSeconds);
+  }
 
   let body: CompileRequest;
   try {

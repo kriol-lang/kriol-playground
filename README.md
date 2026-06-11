@@ -23,6 +23,9 @@ KRIOL_COMPILE_QUEUE_SIZE=8
 KRIOL_COMPILE_TIMEOUT_MS=10000
 KRIOL_MAX_SOURCE_BYTES=131072
 KRIOL_COMPILE_OUTPUT_LIMIT_BYTES=65536
+KRIOL_COMPILE_RATE_LIMIT=true
+KRIOL_COMPILE_RATE_LIMIT_MAX=12
+KRIOL_COMPILE_RATE_LIMIT_WINDOW_MS=60000
 ```
 
 ## Container
@@ -37,6 +40,10 @@ docker run --rm -p 3000:3000 kriol-play
 
 The image runs the web app as an unprivileged user. Compile requests are queued,
 written to private temporary directories, and killed if they exceed the timeout.
+The compile API also applies a soft per-client-address rate limit before adding
+work to the queue. When deploying behind a reverse proxy, configure SvelteKit's
+adapter-node client address headers so the limiter sees the real client IP
+instead of the proxy address.
 
 To run the same container setup in dev mode, build the `dev` target and expose
 Vite's dev-server port:
