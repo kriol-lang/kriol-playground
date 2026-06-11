@@ -27,7 +27,6 @@
           basicSetup,
           keymap.of([indentWithTab]),
           EditorState.readOnly.of(readonly),
-          EditorView.lineWrapping,
           EditorView.updateListener.of((update) => {
             if (update.docChanged && !applyingExternalValue)
               value = update.state.doc.toString();

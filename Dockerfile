@@ -42,6 +42,22 @@ COPY package.json package-lock.json ./
 RUN npm install
 
 COPY . .
+
+FROM build AS dev
+
+ENV HOST=0.0.0.0
+ENV PORT=5173
+ENV KRIOL_COMPILE_QUEUE_SIZE=8
+ENV KRIOL_COMPILE_TIMEOUT_MS=10000
+ENV KRIOL_MAX_SOURCE_BYTES=131072
+ENV KRIOL_COMPILE_OUTPUT_LIMIT_BYTES=65536
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev"]
+
+FROM build AS production-build
+
 RUN npm run build \
     && npm prune --omit=dev
 
@@ -68,9 +84,9 @@ RUN apt-get update \
     && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app
 
 COPY --from=build /opt/kriol /opt/kriol
-COPY --from=build /src/build /app/build
-COPY --from=build /src/node_modules /app/node_modules
-COPY --from=build /src/package.json /app/package.json
+COPY --from=production-build /src/build /app/build
+COPY --from=production-build /src/node_modules /app/node_modules
+COPY --from=production-build /src/package.json /app/package.json
 
 RUN chown -R app:app /app \
     && "${KRIOL_BIN}" --version

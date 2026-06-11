@@ -1,9 +1,17 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import logoUrl from '../assets/kriol-lang-logo.svg';
   import KriolEditor from '$lib/components/KriolEditor.svelte';
   import { BackendCompiler } from '$lib/compiler/backendCompiler';
   import type { CompileResponse, CompileStatus } from '$lib/compiler/types';
-  import { runWasiModule, type WasiRunResult } from '$lib/runtime/wasiRunner';
+  import type { WasiRunResult } from '$lib/runtime/wasiRunner';
+
+  type RunStatus = 'idle' | 'running' | 'done' | 'error' | 'stopped';
+  type WorkerMessage =
+    | { type: 'stdout'; chunk: string }
+    | { type: 'stderr'; chunk: string }
+    | { type: 'done'; result: WasiRunResult }
+    | { type: 'error'; error: string };
 
   const backendCompiler = new BackendCompiler();
 
@@ -24,15 +32,25 @@ fn inisiu() {
   let result: CompileResponse | null = null;
   let wasmUrl = '';
   let wasmBytes: Uint8Array | null = null;
-  let runStatus: 'idle' | 'running' | 'done' | 'error' = 'idle';
+  let runStatus: RunStatus = 'idle';
   let runResult: WasiRunResult | null = null;
   let runError = '';
+  let consoleStdout = '';
+  let consoleStderr = '';
+  let runWorker: Worker | null = null;
+  let infoDialog: HTMLDialogElement | null = null;
   let theme: 'light' | 'dark' = 'light';
 
   $: diagnostics = result?.diagnostics ?? [];
+  $: isCompiling = status === 'queued' || status === 'running';
   $: canDownload = Boolean(result?.ok && wasmUrl);
   $: canRun = Boolean(result?.ok && wasmBytes && runStatus !== 'running');
-  $: isBusy = status === 'queued' || status === 'running';
+  $: consoleTitle = diagnostics.length > 0
+    ? 'Diagnostics'
+    : runError
+      ? 'Runtime Error'
+      : 'Console';
+  $: consoleOutput = consoleStdout || '(no stdout)';
   $: if (typeof document !== 'undefined')
     document.documentElement.dataset.theme = theme;
 
@@ -43,7 +61,20 @@ fn inisiu() {
     runStatus = 'idle';
     runResult = null;
     runError = '';
+    consoleStdout = '';
+    consoleStderr = '';
     revokeWasmUrl();
+
+    if (!hasEntryPoint(source)) {
+      status = 'error';
+      result = {
+        ok: false,
+        mode: 'backend',
+        diagnostics: ["Missing entry point: define `fn inisiu()` before compiling."],
+        elapsedMs: 0
+      };
+      return;
+    }
 
     try {
       const response = await backendCompiler.compile({
@@ -73,17 +104,79 @@ fn inisiu() {
     if (!wasmBytes)
       return;
 
+    stopRun(false);
     runStatus = 'running';
     runResult = null;
     runError = '';
+    consoleStdout = '';
+    consoleStderr = '';
 
-    try {
-      runResult = await runWasiModule(wasmBytes);
-      runStatus = runResult.exitCode === 0 ? 'done' : 'error';
-    } catch (error) {
+    const worker = new Worker(new URL('../lib/runtime/wasiRunWorker.ts', import.meta.url), {
+      type: 'module'
+    });
+    runWorker = worker;
+
+    worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+      if (worker !== runWorker)
+        return;
+
+      if (event.data.type === 'stdout') {
+        consoleStdout += event.data.chunk;
+        return;
+      }
+
+      if (event.data.type === 'stderr') {
+        consoleStderr += event.data.chunk;
+        return;
+      }
+
+      runWorker = null;
+      worker.terminate();
+
+      if (event.data.type === 'done') {
+        runResult = event.data.result;
+        runStatus = event.data.result.exitCode === 0 ? 'done' : 'error';
+        return;
+      }
+
       runStatus = 'error';
-      runError = error instanceof Error ? error.message : String(error);
-    }
+      runError = event.data.error;
+    };
+
+    worker.onerror = (event) => {
+      if (worker !== runWorker)
+        return;
+
+      runWorker = null;
+      worker.terminate();
+      runStatus = 'error';
+      runError = event.message;
+    };
+
+    worker.postMessage({ type: 'run', wasmBytes });
+  }
+
+  function stopRun(markStopped = true) {
+    if (!runWorker)
+      return;
+
+    runWorker.terminate();
+    runWorker = null;
+    if (markStopped)
+      runStatus = 'stopped';
+  }
+
+  function clearConsole() {
+    stopRun(false);
+    result = null;
+    wasmBytes = null;
+    runStatus = 'idle';
+    runResult = null;
+    runError = '';
+    consoleStdout = '';
+    consoleStderr = '';
+    status = 'idle';
+    revokeWasmUrl();
   }
 
   function base64ToBytes(text: string) {
@@ -104,6 +197,28 @@ fn inisiu() {
   function toggleTheme() {
     theme = theme === 'light' ? 'dark' : 'light';
   }
+
+  function hasEntryPoint(code: string) {
+    const withoutStrings = code.replace(/"(?:\\.|[^"\\])*"/g, '""');
+    const withoutComments = withoutStrings
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    return /\bfn\s+inisiu\s*\(/.test(withoutComments);
+  }
+
+  function openInfoDialog() {
+    if (infoDialog && !infoDialog.open)
+      infoDialog.showModal();
+  }
+
+  function closeInfoDialog() {
+    infoDialog?.close();
+  }
+
+  onDestroy(() => {
+    stopRun(false);
+    revokeWasmUrl();
+  });
 </script>
 
 <svelte:head>
@@ -150,13 +265,16 @@ fn inisiu() {
   <section class="workspace" aria-label="Kriol playground">
     <div class="editor-pane">
       <div class="bar">
-        <div>
+        <div class="title-row">
           <h1>Playground</h1>
+          <button class="info-button" type="button" aria-label="How the playground works" title="How the playground works" on:click={openInfoDialog}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16.001A8 8 0 0 1 12 20Zm0-9a1 1 0 0 0-1 1v4a1 1 0 1 0 2 0v-4a1 1 0 0 0-1-1Zm.38-3.92a1 1 0 0 0-.76 0 1 1 0 0 0-.33.21 1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0A1 1 0 0 0 13 8a1 1 0 0 0-.62-.92Z" /></svg>
+          </button>
         </div>
 
         <div class="actions">
-          <button class="primary" type="button" disabled={isBusy} on:click={compile}>
-            {isBusy ? 'Compiling' : 'Compile'}
+          <button class="primary" type="button" disabled={isCompiling || runStatus === 'running'} on:click={compile}>
+            {isCompiling ? 'Compiling' : 'Compile'}
           </button>
           <button class="secondary" type="button" disabled={!canRun} on:click={runProgram}>
             {runStatus === 'running' ? 'Running' : 'Run'}
@@ -185,26 +303,40 @@ fn inisiu() {
       </div>
 
       <div class="panel">
+        <div class="panel-header">
+          <h2>{consoleTitle}</h2>
+          <div class="panel-actions">
+            {#if runStatus === 'running'}
+              <button class="tool-button danger" type="button" aria-label="Stop run" title="Stop run" on:click={() => stopRun()}>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" /></svg>
+              </button>
+            {/if}
+            <button class="tool-button" type="button" aria-label="Clear console" title="Clear console" on:click={clearConsole}>
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 3a1 1 0 0 0-1 1v1H4a1 1 0 1 0 0 2h1v12a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V7h1a1 1 0 1 0 0-2h-4V4a1 1 0 0 0-1-1H9Zm1 2h4v1h-4V5Zm7 2v12a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7h10Zm-7 3a1 1 0 0 0-1 1v5a1 1 0 1 0 2 0v-5a1 1 0 0 0-1-1Zm4 0a1 1 0 0 0-1 1v5a1 1 0 1 0 2 0v-5a1 1 0 0 0-1-1Z" /></svg>
+            </button>
+          </div>
+        </div>
+
         {#if diagnostics.length > 0}
-          <h2>Diagnostics</h2>
           <pre>{diagnostics.join('\n')}</pre>
-        {:else if runError}
-          <h2>Runtime Error</h2>
-          <pre>{runError}</pre>
-        {:else if runResult}
-          <h2>Console</h2>
-          <pre class="console">{runResult.stdout || '(no stdout)'}</pre>
-          {#if runResult.stderr}
-            <h2 class="stderr-heading">stderr</h2>
-            <pre>{runResult.stderr}</pre>
-          {/if}
-          <p class="exit-code">exit {runResult.exitCode}</p>
-        {:else if result?.ok}
-          <h2>Output</h2>
-          <p>wasm32-wasi module ready.</p>
         {:else}
-          <h2>Backend</h2>
-          <p>Ready.</p>
+          <pre class="console">{consoleOutput}</pre>
+          {#if consoleStderr}
+            <h2 class="stderr-heading">stderr</h2>
+            <pre>{consoleStderr}</pre>
+          {/if}
+          {#if runError}
+            <h2 class="stderr-heading">error</h2>
+            <pre>{runError}</pre>
+          {:else if runResult}
+            <p class="exit-code">exit {runResult.exitCode}</p>
+          {:else if runStatus === 'stopped'}
+            <p class="exit-code">stopped</p>
+          {:else if result?.ok}
+            <p class="exit-code">wasm32-wasi module ready.</p>
+          {:else}
+            <p class="exit-code">Ready.</p>
+          {/if}
         {/if}
       </div>
 
@@ -213,6 +345,21 @@ fn inisiu() {
       {/if}
     </aside>
   </section>
+
+  <dialog class="info-dialog" bind:this={infoDialog} aria-labelledby="playground-info-title" on:click={(event) => event.target === infoDialog && closeInfoDialog()}>
+    <div class="dialog-header">
+      <h2 id="playground-info-title">How/Where This Runs</h2>
+      <button class="tool-button" type="button" aria-label="Close" title="Close" on:click={closeInfoDialog}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m13.41 12 6.3-6.29a1 1 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1 1 0 1 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 1.42 1.42l6.29-6.3 6.29 6.3a1 1 0 0 0 1.42-1.42L13.41 12Z" /></svg>
+      </button>
+    </div>
+    <ol>
+      <li>The source code is sent to the playground backend.</li>
+      <li>The backend compiles it to a wasm32-wasi module with the Kriol compiler.</li>
+      <li>The browser runs that wasm module locally with the playground WASI runtime.</li>
+    </ol>
+    <p>So while the compilation happens in the backend, the runtime execution happens in your browser, thanks to the support for the WebAssembly (wasm) target by the compiler.</p>
+  </dialog>
 </main>
 
 <style>
@@ -288,11 +435,35 @@ fn inisiu() {
     cursor: pointer;
   }
 
+  .info-button {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .info-button:hover {
+    color: var(--text);
+    background: var(--surface-muted);
+  }
+
+  .info-button svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+  }
+
   .workspace {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
     gap: 14px;
     max-width: 1360px;
+    height: calc(100vh - 108px);
     min-height: calc(100vh - 108px);
     margin: 0 auto;
   }
@@ -319,6 +490,12 @@ fn inisiu() {
     justify-content: space-between;
     gap: 16px;
     min-height: 58px;
+  }
+
+  .title-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .eyebrow,
@@ -454,7 +631,18 @@ fn inisiu() {
   }
 
   :global(.cm-scroller) {
+    overflow: auto !important;
     font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  }
+
+  :global(.cm-content) {
+    width: max-content;
+    min-width: 100%;
+    white-space: pre;
+  }
+
+  :global(.cm-line) {
+    white-space: pre;
   }
 
   :global(.cm-gutters) {
@@ -471,7 +659,9 @@ fn inisiu() {
   .side-pane {
     display: flex;
     flex-direction: column;
+    min-height: 0;
     min-width: 0;
+    overflow: hidden;
     padding: 12px;
   }
 
@@ -507,12 +697,64 @@ fn inisiu() {
 
   .panel {
     flex: 1;
-    min-height: 260px;
+    min-height: 0;
     overflow: auto;
     padding: 12px;
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--surface-muted);
+  }
+
+  .panel-header {
+    position: sticky;
+    top: -12px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 32px;
+    margin-bottom: 10px;
+    padding-top: 12px;
+    padding-bottom: 8px;
+    background: var(--surface-muted);
+  }
+
+  .panel-header h2 {
+    margin: 0;
+  }
+
+  .panel-actions {
+    display: inline-flex;
+    gap: 6px;
+  }
+
+  .tool-button {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--muted);
+    background: var(--surface);
+    cursor: pointer;
+  }
+
+  .tool-button:hover {
+    color: var(--text);
+    border-color: var(--line-strong);
+  }
+
+  .tool-button.danger:hover {
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+  }
+
+  .tool-button svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
   }
 
   .panel p,
@@ -543,7 +785,50 @@ fn inisiu() {
   }
 
   .download {
+    flex: 0 0 auto;
     margin-top: 12px;
+  }
+
+  .info-dialog {
+    width: min(520px, calc(100vw - 32px));
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  .info-dialog::backdrop {
+    background: rgba(8, 22, 44, 0.45);
+  }
+
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .dialog-header h2 {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    text-transform: none;
+  }
+
+  .info-dialog ol {
+    display: grid;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding-left: 22px;
+    color: var(--text);
+  }
+
+  .info-dialog p {
+    color: var(--muted);
+    line-height: 1.55;
   }
 
   @media (max-width: 860px) {
@@ -557,6 +842,7 @@ fn inisiu() {
 
     .workspace {
       grid-template-columns: 1fr;
+      height: auto;
       min-height: auto;
     }
 
@@ -572,6 +858,11 @@ fn inisiu() {
 
     .side-pane {
       min-height: 320px;
+      overflow: visible;
+    }
+
+    .panel {
+      max-height: 52vh;
     }
   }
 </style>

@@ -4,6 +4,11 @@ export interface WasiRunResult {
   exitCode: number;
 }
 
+export interface WasiRunOptions {
+  onStdout?: (chunk: string) => void;
+  onStderr?: (chunk: string) => void;
+}
+
 class WasiExit extends Error {
   constructor(readonly code: number) {
     super(`WASI program exited with code ${code}`);
@@ -24,7 +29,10 @@ const RIGHTS_FD_SEEK = 1n << 2n;
 const RIGHTS_FD_TELL = 1n << 5n;
 const RIGHTS_FD_FDSTAT_SET_FLAGS = 1n << 3n;
 
-export async function runWasiModule(wasmBytes: Uint8Array): Promise<WasiRunResult> {
+export async function runWasiModule(
+  wasmBytes: Uint8Array,
+  options: WasiRunOptions = {}
+): Promise<WasiRunResult> {
   let instance: WebAssembly.Instance | null = null;
   let stdout = '';
   let stderr = '';
@@ -65,10 +73,13 @@ export async function runWasiModule(wasmBytes: Uint8Array): Promise<WasiRunResul
     }
 
     dataView.setUint32(nwritten, written, true);
-    if (fd === 1)
+    if (fd === 1) {
       stdout += output;
-    else
+      options.onStdout?.(output);
+    } else {
       stderr += output;
+      options.onStderr?.(output);
+    }
     return ERRNO_SUCCESS;
   }
 
