@@ -7,9 +7,17 @@
 
   const backendCompiler = new BackendCompiler();
 
-  let source = `fn inisiu() {
-    textu mensagem = "Kuale, Mundu!";
-    mostran(mensagem);
+  let source = `fn ola(textu nomi, bool naKriolu) {
+    si naKriolu {
+        mostran(f"👋 Olá {nomi}, ami nta programa na Kriolu!");
+    } sinon {
+        mostran(f"👋 Hello {nomi}, I program in Kriol!");
+    }
+}
+
+fn inisiu() {
+    ola("Visitanti", sin);
+    ola("Guest", nau);
 }
 `;
   let status: CompileStatus = 'idle';
