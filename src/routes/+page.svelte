@@ -358,7 +358,7 @@ fn inisiu() {
       <li>The backend compiles it to a wasm32-wasi module with the Kriol compiler.</li>
       <li>The browser runs that wasm module locally with the playground WASI runtime.</li>
     </ol>
-    <p>So while the compilation happens in the backend, the runtime execution happens in your browser, thanks to the support for the WebAssembly (wasm) target by the compiler.</p>
+    <p>So, while the compilation happens in the backend, the runtime execution however happens in your browser. This is possible thanks to the WebAssembly (wasm) target support by the compiler.</p>
   </dialog>
 </main>
 
