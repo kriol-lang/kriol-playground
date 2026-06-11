@@ -478,9 +478,11 @@ fn inisiu() {
 
   .editor-pane {
     display: grid;
-    grid-template-rows: auto minmax(420px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     gap: 12px;
+    min-height: 0;
     min-width: 0;
+    overflow: hidden;
     padding: 12px;
   }
 
@@ -572,7 +574,7 @@ fn inisiu() {
 
   .editor-frame {
     display: grid;
-    grid-template-rows: auto minmax(420px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     min-height: 0;
     overflow: hidden;
   }
@@ -620,7 +622,7 @@ fn inisiu() {
   :global(.editor-host),
   :global(.cm-editor) {
     height: 100%;
-    min-height: 420px;
+    min-height: 0;
   }
 
   :global(.cm-editor) {
@@ -632,7 +634,10 @@ fn inisiu() {
 
   :global(.cm-scroller) {
     overflow: auto !important;
+    height: 100%;
+    -webkit-overflow-scrolling: touch;
     font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    touch-action: pan-x pan-y;
   }
 
   :global(.cm-content) {
@@ -699,6 +704,7 @@ fn inisiu() {
     flex: 1;
     min-height: 0;
     overflow: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 12px;
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -732,8 +738,8 @@ fn inisiu() {
   .tool-button {
     display: grid;
     place-items: center;
-    width: 30px;
-    height: 30px;
+    width: 34px;
+    height: 34px;
     border: 1px solid var(--line);
     border-radius: 8px;
     color: var(--muted);
@@ -752,8 +758,8 @@ fn inisiu() {
   }
 
   .tool-button svg {
-    width: 16px;
-    height: 16px;
+    width: 17px;
+    height: 17px;
     fill: currentColor;
   }
 
@@ -846,6 +852,14 @@ fn inisiu() {
       min-height: auto;
     }
 
+    .editor-pane {
+      max-height: 70vh;
+    }
+
+    .editor-frame {
+      min-height: 0;
+    }
+
     .bar {
       align-items: stretch;
       flex-direction: column;
@@ -863,6 +877,20 @@ fn inisiu() {
 
     .panel {
       max-height: 52vh;
+    }
+
+    .panel-actions {
+      gap: 8px;
+    }
+
+    .tool-button {
+      width: 44px;
+      height: 44px;
+    }
+
+    .tool-button svg {
+      width: 20px;
+      height: 20px;
     }
   }
 </style>
