@@ -69,3 +69,10 @@ are stubbed for now.
 ## Compiler Shape
 
 The UI calls `POST /api/compile` through `BackendCompiler`.
+
+## Editor highlighting
+
+The playground editor uses a small CodeMirror stream language in
+`src/lib/editor/kriolLanguage.ts`. It follows the same regex-level highlighting
+model as the TextMate grammar used by the docs.
+

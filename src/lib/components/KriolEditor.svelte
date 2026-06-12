@@ -4,15 +4,14 @@
   import { EditorState } from '@codemirror/state';
   import { EditorView, keymap } from '@codemirror/view';
   import { indentWithTab } from '@codemirror/commands';
-  import { treeSitterBridge, type TreeSitterParserLike } from '$lib/editor/treeSitterBridge';
+  import { kriolLanguage } from '$lib/editor/kriolLanguage';
 
   interface Props {
     value: string;
     readonly?: boolean;
-    treeSitterParser?: TreeSitterParserLike;
   }
 
-  let { value = $bindable(''), readonly = false, treeSitterParser }: Props = $props();
+  let { value = $bindable(''), readonly = false }: Props = $props();
 
   let host: HTMLDivElement;
   let view: EditorView | null = null;
@@ -31,7 +30,7 @@
             if (update.docChanged && !applyingExternalValue)
               value = update.state.doc.toString();
           }),
-          treeSitterBridge(treeSitterParser)
+          kriolLanguage(),
         ]
       })
     });
