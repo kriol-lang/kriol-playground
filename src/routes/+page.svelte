@@ -375,6 +375,7 @@ fn inisiu() {
       <li>O navegador executa esse módulo WASM localmente com o ambiente de execução WASI do playground.</li>
     </ol>
     <p>Então, embora a compilação ocorra no backend, a execução em tempo de execução ocorre, no entanto, no seu navegador. Isto é possível graças ao suporte ao target de compilação WebAssembly (wasm) por parte do compilador.</p>
+    <p>Por causa da execução ocorrer no contexto do navegador, algumas capacidades do ambiente nativo, como acesso direto ao sistema de ficheiros ou a processos externos, podem estar limitadas.</p>
   </dialog>
 </main>
 
