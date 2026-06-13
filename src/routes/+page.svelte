@@ -46,11 +46,12 @@ fn inisiu() {
   $: canDownload = Boolean(result?.ok && wasmUrl);
   $: canRun = Boolean(result?.ok && wasmBytes && runStatus !== 'running');
   $: consoleTitle = diagnostics.length > 0
-    ? 'Diagnostics'
+    ? 'Diagnósticos'
     : runError
-      ? 'Runtime Error'
-      : 'Console';
-  $: consoleOutput = consoleStdout || '(no stdout)';
+      ? 'Erro de execução'
+      : 'Consola';
+  $: consoleOutput = consoleStdout || '(sem saída padrão)';
+  $: statusLabel = translateStatus(status);
   $: if (typeof document !== 'undefined')
     document.documentElement.dataset.theme = theme;
 
@@ -70,7 +71,7 @@ fn inisiu() {
       result = {
         ok: false,
         mode: 'backend',
-        diagnostics: ["Missing entry point: define `fn inisiu()` before compiling."],
+        diagnostics: ["Falta a função de entrada: defina `fn inisiu()` antes de compilar."],
         elapsedMs: 0
       };
       return;
@@ -198,6 +199,21 @@ fn inisiu() {
     theme = theme === 'light' ? 'dark' : 'light';
   }
 
+  function translateStatus(value: CompileStatus) {
+    switch (value) {
+      case 'idle':
+        return 'preparado';
+      case 'queued':
+        return 'em fila';
+      case 'running':
+        return 'a compilar';
+      case 'done':
+        return 'concluído';
+      case 'error':
+        return 'erro';
+    }
+  }
+
   function hasEntryPoint(code: string) {
     const withoutStrings = code.replace(/"(?:\\.|[^"\\])*"/g, '""');
     const withoutComments = withoutStrings
@@ -225,7 +241,7 @@ fn inisiu() {
   <title>Kriol Playground</title>
   <meta
     name="description"
-    content="Compile Kriol source to wasm32-wasi with the Kriol backend compiler."
+    content="Compile o código-fonte Kriol para wasm32-wasi com o compilador backend Kriol e execute no navegador."
   />
   <link rel="icon" href={logoUrl} />
 </svelte:head>
@@ -274,10 +290,10 @@ fn inisiu() {
 
         <div class="actions">
           <button class="primary" type="button" disabled={isCompiling || runStatus === 'running'} on:click={compile}>
-            {isCompiling ? 'Compiling' : 'Compile'}
+            {isCompiling ? 'A compilar...' : 'Compilar'}
           </button>
           <button class="secondary" type="button" disabled={!canRun} on:click={runProgram}>
-            {runStatus === 'running' ? 'Running' : 'Run'}
+            {runStatus === 'running' ? 'A executar...' : 'Executar'}
           </button>
         </div>
       </div>
@@ -293,11 +309,11 @@ fn inisiu() {
 
     <aside class="side-pane">
       <div class="status-line" data-state={status}>
-        <span>{status}</span>
+        <span>{statusLabel}</span>
         {#if result}
           <span>{result.elapsedMs} ms</span>
           {#if typeof result.queuePosition === 'number'}
-            <span>queue {result.queuePosition}</span>
+            <span>fila {result.queuePosition}</span>
           {/if}
         {/if}
       </div>
@@ -307,11 +323,11 @@ fn inisiu() {
           <h2>{consoleTitle}</h2>
           <div class="panel-actions">
             {#if runStatus === 'running'}
-              <button class="tool-button danger" type="button" aria-label="Stop run" title="Stop run" on:click={() => stopRun()}>
+              <button class="tool-button danger" type="button" aria-label="Parar execução" title="Parar execução" on:click={() => stopRun()}>
                 <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" /></svg>
               </button>
             {/if}
-            <button class="tool-button" type="button" aria-label="Clear console" title="Clear console" on:click={clearConsole}>
+            <button class="tool-button" type="button" aria-label="Limpar consola" title="Limpar consola" on:click={clearConsole}>
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 3a1 1 0 0 0-1 1v1H4a1 1 0 1 0 0 2h1v12a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V7h1a1 1 0 1 0 0-2h-4V4a1 1 0 0 0-1-1H9Zm1 2h4v1h-4V5Zm7 2v12a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7h10Zm-7 3a1 1 0 0 0-1 1v5a1 1 0 1 0 2 0v-5a1 1 0 0 0-1-1Zm4 0a1 1 0 0 0-1 1v5a1 1 0 1 0 2 0v-5a1 1 0 0 0-1-1Z" /></svg>
             </button>
           </div>
@@ -322,20 +338,20 @@ fn inisiu() {
         {:else}
           <pre class="console">{consoleOutput}</pre>
           {#if consoleStderr}
-            <h2 class="stderr-heading">stderr</h2>
+            <h2 class="stderr-heading">Erro padrão</h2>
             <pre>{consoleStderr}</pre>
           {/if}
           {#if runError}
-            <h2 class="stderr-heading">error</h2>
+            <h2 class="stderr-heading">Erro</h2>
             <pre>{runError}</pre>
           {:else if runResult}
-            <p class="exit-code">exit {runResult.exitCode}</p>
+            <p class="exit-code">Código de saída {runResult.exitCode}</p>
           {:else if runStatus === 'stopped'}
-            <p class="exit-code">stopped</p>
+            <p class="exit-code">Execução parada.</p>
           {:else if result?.ok}
-            <p class="exit-code">wasm32-wasi module ready.</p>
+            <p class="exit-code">Artefacto compilado para wasm32-wasi e pronto a executar.</p>
           {:else}
-            <p class="exit-code">Ready.</p>
+            <p class="exit-code">Preparado.</p>
           {/if}
         {/if}
       </div>
@@ -348,17 +364,17 @@ fn inisiu() {
 
   <dialog class="info-dialog" bind:this={infoDialog} aria-labelledby="playground-info-title" on:click={(event) => event.target === infoDialog && closeInfoDialog()}>
     <div class="dialog-header">
-      <h2 id="playground-info-title">How/Where This Runs</h2>
+      <h2 id="playground-info-title">Como/aonde isto executa?</h2>
       <button class="tool-button" type="button" aria-label="Close" title="Close" on:click={closeInfoDialog}>
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m13.41 12 6.3-6.29a1 1 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1 1 0 1 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 1.42 1.42l6.29-6.3 6.29 6.3a1 1 0 0 0 1.42-1.42L13.41 12Z" /></svg>
       </button>
     </div>
     <ol>
-      <li>The source code is sent to the playground backend.</li>
-      <li>The backend compiles it to a wasm32-wasi module with the Kriol compiler.</li>
-      <li>The browser runs that wasm module locally with the playground WASI runtime.</li>
+      <li>O código-fonte é enviado para o backend do playground.</li>
+      <li>O backend compila-o num módulo wasm32-wasi com o compilador Kriol.</li>
+      <li>O navegador executa esse módulo WASM localmente com o ambiente de execução WASI do playground.</li>
     </ol>
-    <p>So, while the compilation happens in the backend, the runtime execution however happens in your browser. This is possible thanks to the WebAssembly (wasm) target support by the compiler.</p>
+    <p>Então, embora a compilação ocorra no backend, a execução em tempo de execução ocorre, no entanto, no seu navegador. Isto é possível graças ao suporte ao target de compilação WebAssembly (wasm) por parte do compilador.</p>
   </dialog>
 </main>
 
@@ -570,6 +586,17 @@ fn inisiu() {
   .secondary:disabled {
     cursor: not-allowed;
     opacity: 0.55;
+  }
+
+  .secondary:not(:disabled) {
+    border-color: color-mix(in srgb, var(--success) 62%, var(--line));
+    background: color-mix(in srgb, var(--success) 14%, var(--surface));
+    color: var(--success);
+  }
+
+  .secondary:not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--success) 78%, var(--line));
+    background: color-mix(in srgb, var(--success) 20%, var(--surface));
   }
 
   .editor-frame {
