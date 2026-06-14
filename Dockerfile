@@ -1,9 +1,10 @@
 ARG UBUNTU_TAG=resolute
-ARG KRIOL_COMPILER_URL=https://github.com/kriol-lang/kriol/releases/download/v1.7.8-beta%2Bbuild2/kriol-v1.7.8-beta+build2-linux-x86_64.tar.xz
+ARG KRIOL_TAG=v1.7.9-beta+build1
 
 FROM ubuntu:${UBUNTU_TAG} AS build
 
-ARG KRIOL_COMPILER_URL
+ARG KRIOL_TAG
+ENV KRIOL_URL=https://github.com/kriol-lang/kriol/releases/download/${KRIOL_TAG}/kriol-${KRIOL_TAG}-linux-x86_64.tar.xz
 ENV DEBIAN_FRONTEND=noninteractive
 ENV KRIOL_BIN=/opt/kriol/bin/kriol
 ENV LD_LIBRARY_PATH=/opt/kriol/lib:/opt/kriol/lib64
@@ -20,7 +21,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /tmp/kriol-install /opt/kriol/bin \
-    && curl -fsSL "${KRIOL_COMPILER_URL}" -o /tmp/kriol.tar.xz \
+    && curl -fsSL "${KRIOL_URL}" -o /tmp/kriol.tar.xz \
     && tar -xJf /tmp/kriol.tar.xz -C /tmp/kriol-install \
     && compiler_path="$(find /tmp/kriol-install -type f -name kriol -perm /111 | head -n 1)" \
     && test -n "${compiler_path}" \
