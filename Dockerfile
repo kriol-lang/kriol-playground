@@ -1,5 +1,5 @@
 ARG UBUNTU_TAG=resolute
-ARG KRIOL_TAG=v1.7.9-beta+build1
+ARG KRIOL_TAG=v1.7.10-beta+build1
 
 FROM ubuntu:${UBUNTU_TAG} AS build
 
