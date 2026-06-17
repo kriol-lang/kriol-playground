@@ -1,4 +1,4 @@
-import type { CompileRequest, CompileResponse, CompilerProvider } from './types';
+import type { CompileRequest, CompileResponse, CompilerInfoResponse, CompilerProvider } from './types';
 
 export class BackendCompiler implements CompilerProvider {
   readonly mode = 'backend' as const;
@@ -17,5 +17,12 @@ export class BackendCompiler implements CompilerProvider {
       payload.diagnostics = [`Compile request failed with HTTP: ${response.status}`];
     }
     return payload;
+  }
+
+  async info(): Promise<CompilerInfoResponse> {
+    const response = await fetch('/api/compile');
+    if (!response.ok)
+      throw new Error(`Compiler info request failed with HTTP: ${response.status}`);
+    return (await response.json()) as CompilerInfoResponse;
   }
 }

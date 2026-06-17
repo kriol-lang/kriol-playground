@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import logoUrl from '../assets/kriol-lang-logo.svg';
   import KriolEditor from '$lib/components/KriolEditor.svelte';
   import { BackendCompiler } from '$lib/compiler/backendCompiler';
@@ -40,6 +40,7 @@ fn inisiu() {
   let runWorker: Worker | null = null;
   let infoDialog: HTMLDialogElement | null = null;
   let theme: 'light' | 'dark' = 'light';
+  let compilerVersion = 'Kriol';
 
   $: diagnostics = result?.diagnostics ?? [];
   $: isCompiling = status === 'queued' || status === 'running';
@@ -83,6 +84,8 @@ fn inisiu() {
         target: 'wasm32-wasi'
       });
       result = response;
+      if (response.compilerVersion)
+        compilerVersion = response.compilerVersion;
       status = response.ok ? 'done' : 'error';
 
       if (response.ok && response.wasmBase64) {
@@ -235,6 +238,16 @@ fn inisiu() {
     stopRun(false);
     revokeWasmUrl();
   });
+
+  onMount(() => {
+    backendCompiler.info()
+      .then((info) => {
+        compilerVersion = info.compilerVersion;
+      })
+      .catch(() => {
+        compilerVersion = 'Kriol';
+      });
+  });
 </script>
 
 <svelte:head>
@@ -252,6 +265,7 @@ fn inisiu() {
       <img src={logoUrl} alt="" />
       <span>Kriol</span>
     </a>
+    <span class="version-badge">{compilerVersion}</span>
 
     <nav class="nav-actions" aria-label="Project links">
       <a class="icon-link" href="https://docs.kriol.dev" rel="noreferrer" target="_blank" aria-label="KriolLang Documentation">
@@ -396,6 +410,7 @@ fn inisiu() {
   }
 
   .brand,
+  .version-badge,
   .nav-actions,
   .icon-link {
     display: inline-flex;
@@ -414,6 +429,19 @@ fn inisiu() {
     width: 32px;
     height: 32px;
     object-fit: contain;
+  }
+
+  .version-badge {
+    min-height: 28px;
+    margin-right: auto;
+    padding: 0 9px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--muted);
+    background: var(--surface-muted);
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
   }
 
   .nav-actions {

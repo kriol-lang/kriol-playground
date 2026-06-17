@@ -5,11 +5,12 @@ type KriolState = {
   inBlockComment: boolean;
 };
 
-const keywords = /^(fn|dipoz|inpristan)\b/;
+const keywords = /^(fn|dipoz|inpristan|molda)\b/;
 const controlKeywords = /^(si|sinon|pa|nkuantu|para|kontinua|divolvi|sai|konfirma)\b/;
 const builtinFunctions = /^(mostra|mostran)\b/;
 const types = /^(nter|num|textu|bool)\b/;
 const booleans = /^(sin|nau)\b/;
+const typeIdentifiers = /^[A-Z][A-Za-z0-9_]*/;
 
 const kriolStreamLanguage = StreamLanguage.define<KriolState>({
   name: 'kriol',
@@ -59,6 +60,9 @@ const kriolStreamLanguage = StreamLanguage.define<KriolState>({
     if (stream.match(types))
       return 'type';
 
+    if (stream.match(typeIdentifiers))
+      return 'type';
+
     if (stream.match(booleans))
       return 'bool';
 
@@ -68,7 +72,7 @@ const kriolStreamLanguage = StreamLanguage.define<KriolState>({
     if (stream.match(/^[A-Za-z_][A-Za-z0-9_]*/))
       return 'variableName';
 
-    if (stream.match(/^(\+=|-=|\*=|\/=|==|!=|<=|>=|&&|\|\||[+\-*/<>=!])/))
+    if (stream.match(/^(::|\+=|-=|\*=|\/=|==|!=|<=|>=|&&|\|\||[+\-*/<>=!:])/))
       return 'operator';
 
     stream.next();

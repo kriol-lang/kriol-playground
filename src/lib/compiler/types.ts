@@ -10,10 +10,15 @@ export interface CompileRequest {
 export interface CompileResponse {
   ok: boolean;
   mode: CompilerMode;
+  compilerVersion?: string;
   queuePosition?: number;
   wasmBase64?: string;
   diagnostics: string[];
   elapsedMs: number;
+}
+
+export interface CompilerInfoResponse {
+  compilerVersion: string;
 }
 
 export interface CompilerProvider {

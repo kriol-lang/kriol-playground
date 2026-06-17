@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { dev } from '$app/environment';
-import { enqueueCompile } from '$lib/server/compileQueue';
+import { enqueueCompile, getCompilerVersion } from '$lib/server/compileQueue';
 import { checkCompileRateLimit } from '$lib/server/rateLimit';
 import type { CompileRequest } from '$lib/compiler/types';
 import type { RequestHandler } from './$types';
@@ -62,6 +62,12 @@ export const OPTIONS: RequestHandler = async ({ request }) => {
     return forbiddenResponse();
 
   return new Response(null, { status: 204 });
+};
+
+export const GET: RequestHandler = async () => {
+  return json({
+    compilerVersion: await getCompilerVersion()
+  });
 };
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {

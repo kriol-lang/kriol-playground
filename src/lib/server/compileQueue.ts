@@ -21,6 +21,7 @@ interface Job {
 
 const queue: Job[] = [];
 let active = false;
+let compilerVersionPromise: Promise<string> | null = null;
 
 export function getQueueDepth() {
   return queue.length + (active ? 1 : 0);
@@ -51,6 +52,11 @@ export function enqueueCompile(source: string): Promise<CompileResponse> {
   });
 }
 
+export function getCompilerVersion() {
+  compilerVersionPromise ??= readCompilerVersion();
+  return compilerVersionPromise;
+}
+
 async function drainQueue() {
   if (active)
     return;
@@ -72,6 +78,7 @@ async function drainQueue() {
 
 async function compileWithNativeKriol(source: string, queuedMs: number): Promise<CompileResponse> {
   const startedAt = Date.now();
+  const compilerVersion = await getCompilerVersion();
   const workdir = await mkdtemp(join(tmpdir(), 'kriol-playground-'));
   const sourcePath = join(workdir, 'input.kr');
   const wasmPath = join(workdir, 'output.wasm');
@@ -93,6 +100,7 @@ async function compileWithNativeKriol(source: string, queuedMs: number): Promise
       return {
         ok: false,
         mode: 'backend',
+        compilerVersion,
         diagnostics: splitDiagnostics(formatFailure(run)),
         elapsedMs: Date.now() - startedAt
       };
@@ -102,6 +110,7 @@ async function compileWithNativeKriol(source: string, queuedMs: number): Promise
     return {
       ok: true,
       mode: 'backend',
+      compilerVersion,
       queuePosition: queuedMs > 0 ? 0 : undefined,
       wasmBase64: wasm.toString('base64'),
       diagnostics: [],
@@ -110,6 +119,13 @@ async function compileWithNativeKriol(source: string, queuedMs: number): Promise
   } finally {
     await rm(workdir, { recursive: true, force: true });
   }
+}
+
+async function readCompilerVersion() {
+  const run = await runKriol(['--version']);
+  if (run.code !== 0)
+    return 'Kriol version unavailable';
+  return (run.stdout || run.stderr).trim() || 'Kriol version unavailable';
 }
 
 function runKriol(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
