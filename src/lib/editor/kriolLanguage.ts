@@ -8,7 +8,7 @@ type KriolState = {
 const keywords = /^(fn|dipoz|inpristan|molda)\b/;
 const controlKeywords = /^(si|sinon|pa|nkuantu|para|kontinua|divolvi|sai|konfirma)\b/;
 const builtinFunctions = /^(mostra|mostran)\b/;
-const types = /^(nter|num|textu|bool)\b/;
+const types = /^(nter|num|textu|bool|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|isize|usize)\b/;
 const booleans = /^(sin|nau)\b/;
 const typeIdentifiers = /^[A-Z][A-Za-z0-9_]*/;
 
@@ -45,10 +45,10 @@ const kriolStreamLanguage = StreamLanguage.define<KriolState>({
     if (stream.match(/"(?:[^"\\]|\\.)*"/) || stream.match(/'(?:[^'\\]|\\.)*'/))
       return 'string';
 
-    if (stream.match(/^[0-9]+\.[0-9]+/))
+    if (stream.match(/^[+-]?[0-9]+\.[0-9]+/))
       return 'number';
 
-    if (stream.match(/^[0-9]+/))
+    if (stream.match(/^[+-]?[0-9]+/))
       return 'number';
 
     if (stream.match(controlKeywords))
