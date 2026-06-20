@@ -40,7 +40,7 @@ fn inisiu() {
   let runWorker: Worker | null = null;
   let infoDialog: HTMLDialogElement | null = null;
   let theme: 'light' | 'dark' = 'light';
-  let compilerVersion = 'Kriol';
+  let compilerVersion = 'X.Y.Z';
 
   $: diagnostics = result?.diagnostics ?? [];
   $: isCompiling = status === 'queued' || status === 'running';

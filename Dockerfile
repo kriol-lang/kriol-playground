@@ -7,6 +7,7 @@ ARG KRIOL_TAG
 ENV KRIOL_URL=https://github.com/kriol-lang/kriol/releases/download/${KRIOL_TAG}/kriol-${KRIOL_TAG}-linux-x86_64.tar.xz
 ENV DEBIAN_FRONTEND=noninteractive
 ENV KRIOL_BIN=/opt/kriol/bin/kriol
+ENV KRIOL_VERSION_FILE=/opt/kriol/VERSION
 ENV LD_LIBRARY_PATH=/opt/kriol/lib:/opt/kriol/lib64
 
 RUN apt-get update \
@@ -31,7 +32,8 @@ RUN mkdir -p /tmp/kriol-install /opt/kriol/bin \
     && if ! test -x "${KRIOL_BIN}"; then cp "${compiler_path}" "${KRIOL_BIN}"; fi \
     && test -x "${KRIOL_BIN}" \
     && chmod 0755 "${KRIOL_BIN}" \
-    && "${KRIOL_BIN}" --version \
+    && "${KRIOL_BIN}" --version > "${KRIOL_VERSION_FILE}" \
+    && cat "${KRIOL_VERSION_FILE}" \
     && printf 'fn inisiu() {\n    mostran("Kuale, Mundu!");\n}\n' > /tmp/smoke.kriol \
     && "${KRIOL_BIN}" /tmp/smoke.kriol --target wasm32-wasi -o /tmp/smoke.wasm --ignore-extension \
     && test -s /tmp/smoke.wasm \
@@ -68,6 +70,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV HOST=0.0.0.0
 ENV PORT=3000
 ENV KRIOL_BIN=/opt/kriol/bin/kriol
+ENV KRIOL_VERSION_FILE=/opt/kriol/VERSION
 ENV LD_LIBRARY_PATH=/opt/kriol/lib:/opt/kriol/lib64
 ENV KRIOL_COMPILE_QUEUE_SIZE=8
 ENV KRIOL_COMPILE_TIMEOUT_MS=10000
@@ -90,7 +93,8 @@ COPY --from=production-build /src/node_modules /app/node_modules
 COPY --from=production-build /src/package.json /app/package.json
 
 RUN chown -R app:app /app \
-    && "${KRIOL_BIN}" --version
+    && test -s "${KRIOL_VERSION_FILE}" \
+    && cat "${KRIOL_VERSION_FILE}"
 
 WORKDIR /app
 

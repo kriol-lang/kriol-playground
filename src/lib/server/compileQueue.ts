@@ -5,7 +5,10 @@ import { spawn } from 'node:child_process';
 import type { CompileResponse } from '$lib/compiler/types';
 
 const DEFAULT_KRIOL_BIN = resolve(process.cwd(), '../kriol/build/kriol');
+const DEFAULT_KRIOL_VERSION_FILE = '/opt/kriol/VERSION';
 const KRIOL_BIN = process.env.KRIOL_BIN ?? DEFAULT_KRIOL_BIN;
+const KRIOL_VERSION = process.env.KRIOL_VERSION?.trim();
+const KRIOL_VERSION_FILE = process.env.KRIOL_VERSION_FILE ?? DEFAULT_KRIOL_VERSION_FILE;
 const COMPILE_TIMEOUT_MS = Number(process.env.KRIOL_COMPILE_TIMEOUT_MS ?? 10000);
 const MAX_QUEUE_SIZE = Number(process.env.KRIOL_COMPILE_QUEUE_SIZE ?? 8);
 const OUTPUT_LIMIT_BYTES = Number(process.env.KRIOL_COMPILE_OUTPUT_LIMIT_BYTES ?? 64 * 1024);
@@ -53,7 +56,7 @@ export function enqueueCompile(source: string): Promise<CompileResponse> {
 }
 
 export function getCompilerVersion() {
-  compilerVersionPromise ??= readCompilerVersion();
+  compilerVersionPromise ??= readCompilerVersion().then(formatCompilerVersionForDisplay);
   return compilerVersionPromise;
 }
 
@@ -122,10 +125,28 @@ async function compileWithNativeKriol(source: string, queuedMs: number): Promise
 }
 
 async function readCompilerVersion() {
+  if (KRIOL_VERSION)
+    return KRIOL_VERSION;
+
+  try {
+    const version = (await readFile(KRIOL_VERSION_FILE, 'utf8')).trim();
+    if (version)
+      return version;
+  } catch {
+    // Local development may not have container-provided version metadata.
+  }
+
   const run = await runKriol(['--version']);
   if (run.code !== 0)
     return 'Kriol version unavailable';
   return (run.stdout || run.stderr).trim() || 'Kriol version unavailable';
+}
+
+function formatCompilerVersionForDisplay(version: string) {
+  const [command, tag] = version.trim().split(/\s+/, 3);
+  if (command?.toLowerCase() === 'kriol' && tag)
+    return tag;
+  return version;
 }
 
 function runKriol(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
