@@ -5,7 +5,7 @@ import { handler } from './build/handler.js';
 const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_PORT = '3000';
 const DEFAULT_COOP = 'same-origin';
-const DEFAULT_COEP = 'credentialless';
+const DEFAULT_COEP = 'require-corp';
 const DEFAULT_CORP = '';
 
 const host = env.HOST ?? DEFAULT_HOST;

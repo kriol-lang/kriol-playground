@@ -1,5 +1,5 @@
 const DEFAULT_COOP = 'same-origin';
-const DEFAULT_COEP = 'credentialless';
+const DEFAULT_COEP = 'require-corp';
 const DEFAULT_CORP = '';
 
 export function crossOriginIsolationHeaders(env: Record<string, string | undefined> = {}) {
