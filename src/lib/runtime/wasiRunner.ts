@@ -5,8 +5,15 @@ export interface WasiRunResult {
 }
 
 export interface WasiRunOptions {
+  stdin?: WasiStdin;
+  onStdinRequest?: () => void;
   onStdout?: (chunk: string) => void;
   onStderr?: (chunk: string) => void;
+}
+
+export interface WasiStdin {
+  control: Int32Array;
+  data: Uint8Array;
 }
 
 class WasiExit extends Error {
@@ -28,6 +35,10 @@ const RIGHTS_FD_WRITE = 1n << 6n;
 const RIGHTS_FD_SEEK = 1n << 2n;
 const RIGHTS_FD_TELL = 1n << 5n;
 const RIGHTS_FD_FDSTAT_SET_FLAGS = 1n << 3n;
+const STDIN_EMPTY = 0;
+const STDIN_READY = 1;
+const STDIN_CLOSED = 2;
+const STDIN_REQUEST_COUNT = 2;
 
 export async function runWasiModule(
   wasmBytes: Uint8Array,
@@ -39,6 +50,8 @@ export async function runWasiModule(
   let lastWasiCall = '(none)';
   let importsSummary = '(not compiled)';
   const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let stdinOffset = 0;
 
   function memory() {
     const exportedMemory = instance?.exports.memory;
@@ -83,6 +96,60 @@ export async function runWasiModule(
     return ERRNO_SUCCESS;
   }
 
+  function fdRead(fd: number, iovs: number, iovsLen: number, nread: number) {
+    if (fd !== 0)
+      return ERRNO_BADF;
+
+    const dataView = view();
+    const data = bytes();
+    let read = 0;
+    let requestedInput = false;
+
+    if (!options.stdin) {
+      dataView.setUint32(nread, 0, true);
+      return ERRNO_SUCCESS;
+    }
+
+    while (read === 0) {
+      const state = Atomics.load(options.stdin.control, 0);
+      if (state === STDIN_CLOSED) {
+        dataView.setUint32(nread, 0, true);
+        return ERRNO_SUCCESS;
+      }
+      if (state === STDIN_READY)
+        break;
+
+      if (!requestedInput) {
+        Atomics.add(options.stdin.control, STDIN_REQUEST_COUNT, 1);
+        options.onStdinRequest?.();
+        requestedInput = true;
+      }
+      Atomics.wait(options.stdin.control, 0, STDIN_EMPTY);
+    }
+
+    const inputLen = Atomics.load(options.stdin.control, 1);
+    for (let i = 0; i < iovsLen && stdinOffset < inputLen; i += 1) {
+      const iov = iovs + i * 8;
+      const ptr = dataView.getUint32(iov, true);
+      const len = dataView.getUint32(iov + 4, true);
+      const available = inputLen - stdinOffset;
+      const chunkLen = Math.min(len, available);
+
+      data.set(options.stdin.data.subarray(stdinOffset, stdinOffset + chunkLen), ptr);
+      stdinOffset += chunkLen;
+      read += chunkLen;
+    }
+
+    if (stdinOffset >= inputLen) {
+      stdinOffset = 0;
+      Atomics.store(options.stdin.control, 1, 0);
+      Atomics.store(options.stdin.control, 0, STDIN_EMPTY);
+    }
+
+    dataView.setUint32(nread, read, true);
+    return ERRNO_SUCCESS;
+  }
+
   function writeU64(ptr: number, value: bigint) {
     view().setBigUint64(ptr, value, true);
   }
@@ -124,7 +191,7 @@ export async function runWasiModule(
       const args = ["program.wasm"]; // Add actual CLI args here later if needed
       const dataView = view();
       dataView.setUint32(argcPtr, args.length, true);
-      const totalByteLength = args.reduce((sum, arg) => sum + new TextEncoder().encode(arg).length + 1, 0);
+      const totalByteLength = args.reduce((sum, arg) => sum + encoder.encode(arg).length + 1, 0);
       dataView.setUint32(argvBufSizePtr, totalByteLength, true);
 
       return ERRNO_SUCCESS;
@@ -142,7 +209,7 @@ export async function runWasiModule(
         dataView.setUint32(currentArgvPtr, currentBufPtr, true);
         currentArgvPtr += 4; // WASM32 pointers are 4 bytes
         // Write the string + null terminator
-        const encoded = new TextEncoder().encode(arg + "\0");
+        const encoded = encoder.encode(arg + "\0");
         data.set(encoded, currentBufPtr);
         currentBufPtr += encoded.length;
       }
@@ -175,10 +242,7 @@ export async function runWasiModule(
     },
     fd_prestat_dir_name: () => ERRNO_BADF,
     fd_prestat_get: () => ERRNO_BADF,
-    fd_read: (_fd: number, _iovs: number, _iovsLen: number, nread: number) => {
-      view().setUint32(nread, 0, true);
-      return ERRNO_SUCCESS;
-    },
+    fd_read: fdRead,
     fd_seek: (_fd: number, _offset: bigint, _whence: number, newOffsetPtr: number) => {
       writeU64(newOffsetPtr, 0n);
       return ERRNO_SUCCESS;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import logoUrl from '../assets/kriol-lang-logo.svg';
   import KriolEditor from '$lib/components/KriolEditor.svelte';
   import { BackendCompiler } from '$lib/compiler/backendCompiler';
@@ -8,12 +8,21 @@
 
   type RunStatus = 'idle' | 'running' | 'done' | 'error' | 'stopped';
   type WorkerMessage =
-    | { type: 'stdout'; chunk: string }
-    | { type: 'stderr'; chunk: string }
+    | { type: 'stdin-request' }
     | { type: 'done'; result: WasiRunResult }
     | { type: 'error'; error: string };
 
   const backendCompiler = new BackendCompiler();
+  const STDIN_READY = 1;
+  const STDIN_CLOSED = 2;
+  const STDIN_REQUEST_COUNT = 2;
+  const STDIN_CONTROL_SLOTS = 3;
+  const STDIN_BUFFER_BYTES = 64 * 1024;
+  const OUTPUT_BUFFER_BYTES = 64 * 1024;
+  const OUTPUT_CONTROL_SLOTS = 3;
+  const OUTPUT_READ_INDEX = 0;
+  const OUTPUT_WRITE_INDEX = 1;
+  const OUTPUT_DROPPED_BYTES = 2;
 
   let source = `fn ola(textu nomi, bool naKriolu) {
     si naKriolu {
@@ -37,6 +46,20 @@ fn inisiu() {
   let runError = '';
   let consoleStdout = '';
   let consoleStderr = '';
+  let stdinValue = '';
+  let stdinPlaceholder = 'Valor para stdin';
+  let waitingForStdin = false;
+  let stdinControl: Int32Array | null = null;
+  let stdinData: Uint8Array | null = null;
+  let stdinInput: HTMLInputElement | null = null;
+  let stdinRequestCount = 0;
+  let stdoutControl: Int32Array | null = null;
+  let stdoutData: Uint8Array | null = null;
+  let stderrControl: Int32Array | null = null;
+  let stderrData: Uint8Array | null = null;
+  let stdoutDecoder = new TextDecoder();
+  let stderrDecoder = new TextDecoder();
+  let outputPoll: ReturnType<typeof setInterval> | null = null;
   let runWorker: Worker | null = null;
   let infoDialog: HTMLDialogElement | null = null;
   let theme: 'light' | 'dark' = 'light';
@@ -114,6 +137,32 @@ fn inisiu() {
     runError = '';
     consoleStdout = '';
     consoleStderr = '';
+    stdinValue = '';
+    stdinPlaceholder = 'Valor para stdin';
+    waitingForStdin = false;
+    stdinRequestCount = 0;
+
+    if (typeof SharedArrayBuffer !== 'function' || !globalThis.crossOriginIsolated) {
+      runStatus = 'error';
+      runError = 'Interactive stdin requires SharedArrayBuffer. Reload after the playground is served with cross-origin isolation headers.';
+      return;
+    }
+
+    const stdinControlBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * STDIN_CONTROL_SLOTS);
+    const stdinDataBuffer = new SharedArrayBuffer(STDIN_BUFFER_BYTES);
+    const stdoutControlBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * OUTPUT_CONTROL_SLOTS);
+    const stdoutDataBuffer = new SharedArrayBuffer(OUTPUT_BUFFER_BYTES);
+    const stderrControlBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * OUTPUT_CONTROL_SLOTS);
+    const stderrDataBuffer = new SharedArrayBuffer(OUTPUT_BUFFER_BYTES);
+    stdinControl = new Int32Array(stdinControlBuffer);
+    stdinData = new Uint8Array(stdinDataBuffer);
+    stdoutControl = new Int32Array(stdoutControlBuffer);
+    stdoutData = new Uint8Array(stdoutDataBuffer);
+    stderrControl = new Int32Array(stderrControlBuffer);
+    stderrData = new Uint8Array(stderrDataBuffer);
+    stdoutDecoder = new TextDecoder();
+    stderrDecoder = new TextDecoder();
+    startRuntimePolling();
 
     const worker = new Worker(new URL('../lib/runtime/wasiRunWorker.ts', import.meta.url), {
       type: 'module'
@@ -124,18 +173,15 @@ fn inisiu() {
       if (worker !== runWorker)
         return;
 
-      if (event.data.type === 'stdout') {
-        consoleStdout += event.data.chunk;
+      if (event.data.type === 'stdin-request') {
+        activateStdinPrompt();
         return;
       }
 
-      if (event.data.type === 'stderr') {
-        consoleStderr += event.data.chunk;
-        return;
-      }
-
+      drainRuntimeOutput(true);
       runWorker = null;
       worker.terminate();
+      resetRuntimeChannels();
 
       if (event.data.type === 'done') {
         runResult = event.data.result;
@@ -151,23 +197,176 @@ fn inisiu() {
       if (worker !== runWorker)
         return;
 
+      drainRuntimeOutput(true);
       runWorker = null;
       worker.terminate();
+      resetRuntimeChannels();
       runStatus = 'error';
       runError = event.message;
     };
 
-    worker.postMessage({ type: 'run', wasmBytes });
+    worker.postMessage({
+      type: 'run',
+      wasmBytes,
+      stdinControlBuffer,
+      stdinDataBuffer,
+      stdoutControlBuffer,
+      stdoutDataBuffer,
+      stderrControlBuffer,
+      stderrDataBuffer
+    });
   }
 
   function stopRun(markStopped = true) {
     if (!runWorker)
       return;
 
+    closeStdin();
+    drainRuntimeOutput(true);
     runWorker.terminate();
     runWorker = null;
+    resetRuntimeChannels();
     if (markStopped)
       runStatus = 'stopped';
+  }
+
+  function closeStdin() {
+    if (!stdinControl)
+      return;
+
+    Atomics.store(stdinControl, 0, STDIN_CLOSED);
+    Atomics.notify(stdinControl, 0);
+  }
+
+  function sendStdin() {
+    if (!waitingForStdin || !stdinControl || !stdinData)
+      return;
+
+    const submitted = stdinValue;
+    const encoder = new TextEncoder();
+    const encoded = encoder.encode(`${submitted}\n`);
+    if (encoded.length > stdinData.length) {
+      runStatus = 'error';
+      runError = `Entrada demasiado grande: limite de ${stdinData.length} bytes por linha.`;
+      closeStdin();
+      runWorker?.terminate();
+      runWorker = null;
+      resetRuntimeChannels();
+      return;
+    }
+
+    drainRuntimeOutput();
+    echoStdin(submitted);
+    stdinData.fill(0);
+    stdinData.set(encoded);
+    Atomics.store(stdinControl, 1, encoded.length);
+    Atomics.store(stdinControl, 0, STDIN_READY);
+    Atomics.notify(stdinControl, 0);
+
+    stdinValue = '';
+    stdinPlaceholder = 'Valor para stdin';
+    waitingForStdin = false;
+  }
+
+  function echoStdin(value: string) {
+    consoleStdout += `${value}\n`;
+  }
+
+  function startRuntimePolling() {
+    stopRuntimePolling();
+    outputPoll = setInterval(() => {
+      drainRuntimeOutput();
+      syncStdinPrompt();
+    }, 33);
+  }
+
+  function stopRuntimePolling() {
+    if (!outputPoll)
+      return;
+
+    clearInterval(outputPoll);
+    outputPoll = null;
+  }
+
+  function drainRuntimeOutput(flush = false) {
+    if (stdoutControl && stdoutData)
+      consoleStdout += drainOutput(stdoutControl, stdoutData, stdoutDecoder);
+    if (stderrControl && stderrData)
+      consoleStderr += drainOutput(stderrControl, stderrData, stderrDecoder);
+
+    if (flush) {
+      consoleStdout += stdoutDecoder.decode();
+      consoleStderr += stderrDecoder.decode();
+    }
+  }
+
+  function drainOutput(control: Int32Array, data: Uint8Array, decoder: TextDecoder) {
+    const read = Atomics.load(control, OUTPUT_READ_INDEX);
+    const write = Atomics.load(control, OUTPUT_WRITE_INDEX);
+    const dropped = Atomics.exchange(control, OUTPUT_DROPPED_BYTES, 0);
+    if (read === write)
+      return dropped > 0 ? `\n[${dropped} bytes de saída truncados]\n` : '';
+
+    let output = '';
+    if (read < write) {
+      output = decoder.decode(copySharedBytes(data, read, write), { stream: true });
+    } else {
+      output = decoder.decode(copySharedBytes(data, read, data.length), { stream: true });
+      output += decoder.decode(copySharedBytes(data, 0, write), { stream: true });
+    }
+
+    Atomics.store(control, OUTPUT_READ_INDEX, write);
+
+    if (dropped > 0)
+      output += `\n[${dropped} bytes de saída truncados]\n`;
+
+    return output;
+  }
+
+  function copySharedBytes(data: Uint8Array, start: number, end: number) {
+    const copy = new Uint8Array(end - start);
+    copy.set(data.subarray(start, end));
+    return copy;
+  }
+
+  function syncStdinPrompt() {
+    if (!stdinControl)
+      return;
+
+    const nextRequestCount = Atomics.load(stdinControl, STDIN_REQUEST_COUNT);
+    if (nextRequestCount === stdinRequestCount)
+      return;
+
+    stdinRequestCount = nextRequestCount;
+    activateStdinPrompt();
+  }
+
+  function activateStdinPrompt() {
+    if (waitingForStdin)
+      return;
+
+    drainRuntimeOutput();
+    stdinPlaceholder = stdinPlaceholderFromStdout();
+    waitingForStdin = true;
+    tick().then(() => stdinInput?.focus());
+  }
+
+  function stdinPlaceholderFromStdout() {
+    const lines = consoleStdout.split(/\r?\n/);
+    const lastLine = lines[lines.length - 1]?.trim();
+    return lastLine || 'Valor para stdin';
+  }
+
+  function resetRuntimeChannels() {
+    stopRuntimePolling();
+    waitingForStdin = false;
+    stdinRequestCount = 0;
+    stdinControl = null;
+    stdinData = null;
+    stdoutControl = null;
+    stdoutData = null;
+    stderrControl = null;
+    stderrData = null;
   }
 
   function clearConsole() {
@@ -179,6 +378,9 @@ fn inisiu() {
     runError = '';
     consoleStdout = '';
     consoleStderr = '';
+    stdinValue = '';
+    stdinPlaceholder = 'Valor para stdin';
+    resetRuntimeChannels();
     status = 'idle';
     revokeWasmUrl();
   }
@@ -236,6 +438,7 @@ fn inisiu() {
 
   onDestroy(() => {
     stopRun(false);
+    resetRuntimeChannels();
     revokeWasmUrl();
   });
 
@@ -347,10 +550,25 @@ fn inisiu() {
           </div>
         </div>
 
+        {#if waitingForStdin}
+          <form class:stdin-active={waitingForStdin} class="stdin-panel" on:submit|preventDefault={sendStdin}>
+            <label for="stdin">Entrada padrão</label>
+            <div class="stdin-row">
+              <input id="stdin" bind:this={stdinInput} bind:value={stdinValue} placeholder={stdinPlaceholder} spellcheck="false" disabled={!waitingForStdin} autocomplete="off" />
+              <button class="secondary stdin-send" type="submit" disabled={!waitingForStdin}>Enviar</button>
+            </div>
+          </form>
+        {/if}
+
         {#if diagnostics.length > 0}
           <pre>{diagnostics.join('\n')}</pre>
         {:else}
-          <pre class="console">{consoleOutput}</pre>
+          <div class="console-wrap">
+            <pre class="console">{consoleOutput}</pre>
+            {#if waitingForStdin}
+              <span class="stdin-waiting">waiting stdin...</span>
+            {/if}
+          </div>
           {#if consoleStderr}
             <h2 class="stderr-heading">Erro padrão</h2>
             <pre>{consoleStderr}</pre>
@@ -791,6 +1009,53 @@ fn inisiu() {
     gap: 6px;
   }
 
+  .stdin-panel {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+
+  .stdin-panel.stdin-active {
+    border-color: color-mix(in srgb, var(--success) 70%, var(--line));
+  }
+
+  .stdin-panel label {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .stdin-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .stdin-row input {
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text);
+    background: var(--surface-muted);
+    font: 13px/1.5 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  }
+
+  .stdin-row input:focus {
+    outline: 2px solid color-mix(in srgb, var(--success) 34%, transparent);
+    outline-offset: 1px;
+  }
+
+  .stdin-send {
+    min-width: 78px;
+  }
+
   .tool-button {
     display: grid;
     place-items: center;
@@ -835,6 +1100,24 @@ fn inisiu() {
 
   pre.console {
     color: var(--text);
+  }
+
+  .console-wrap {
+    min-height: 0;
+  }
+
+  .stdin-waiting {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    margin-top: 8px;
+    padding: 0 8px;
+    border: 1px solid color-mix(in srgb, var(--success) 54%, var(--line));
+    border-radius: 999px;
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 12%, var(--surface));
+    font-size: 12px;
+    font-weight: 800;
   }
 
   .stderr-heading {

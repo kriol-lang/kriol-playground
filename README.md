@@ -63,8 +63,12 @@ comma-separated value if the deployed playground is served from another origin.
 ## Runtime
 
 The browser runner currently supports the WASI calls needed by simple Kriol
-programs that print to stdout/stderr and exit. Filesystem and stdin operations
-are stubbed for now.
+programs that read stdin, print to stdout/stderr, and exit. When WASI fd 0 is
+read, the worker blocks on a `SharedArrayBuffer` stdin channel and the UI polls
+shared stdout/stderr buffers plus stdin request state. The "Entrada padrão"
+prompt appears only while the program is waiting for a line. This requires
+cross-origin isolation, so the SvelteKit server and Vite dev/preview server set
+the required COOP/COEP/CORP headers. Filesystem operations are stubbed for now.
 
 ## Compiler Shape
 
