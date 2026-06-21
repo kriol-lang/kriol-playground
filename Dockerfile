@@ -1,9 +1,11 @@
 ARG UBUNTU_TAG=resolute
 ARG KRIOL_TAG=v1.9.0-alpha+build1
+ARG KRIOL_SHA256="8d93c0c535985f80dddccabc733a4022890266b1adca2f5f8c6f4be64e80216a"
 
 FROM ubuntu:${UBUNTU_TAG} AS build
 
 ARG KRIOL_TAG
+ARG KRIOL_SHA256
 ENV KRIOL_URL=https://github.com/kriol-lang/kriol/releases/download/${KRIOL_TAG}/kriol-${KRIOL_TAG}-linux-x86_64.tar.xz
 ENV DEBIAN_FRONTEND=noninteractive
 ENV KRIOL_BIN=/opt/kriol/bin/kriol
@@ -23,6 +25,7 @@ RUN apt-get update \
 
 RUN mkdir -p /tmp/kriol-install /opt/kriol/bin \
     && curl -fsSL "${KRIOL_URL}" -o /tmp/kriol.tar.xz \
+    && if test -n "${KRIOL_SHA256}"; then echo "${KRIOL_SHA256}  /tmp/kriol.tar.xz" | sha256sum -c -; fi \
     && tar -xJf /tmp/kriol.tar.xz -C /tmp/kriol-install \
     && compiler_path="$(find /tmp/kriol-install -type f -name kriol -perm /111 | head -n 1)" \
     && test -n "${compiler_path}" \

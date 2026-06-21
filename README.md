@@ -38,12 +38,25 @@ docker build -t kriol-play .
 docker run --rm -p 3000:3000 kriol-play
 ```
 
+If a release checksum is available, you can pass it at build time (or set it in the Dockerfile) so the downloaded
+compiler archive is verified before extraction:
+
+```sh
+docker build --build-arg KRIOL_SHA256=<sha256> -t kriol-play .
+```
+
 The image runs the web app as an unprivileged user. Compile requests are queued,
 written to private temporary directories, and killed if they exceed the timeout.
 The compile API also applies a soft per-client-address rate limit before adding
 work to the queue. When deploying behind a reverse proxy, configure SvelteKit's
 adapter-node client address headers so the limiter sees the real client IP
 instead of the proxy address.
+
+The public playground should also be run with container-level restrictions such
+as a read-only root filesystem, a bounded `/tmp` tmpfs, dropped capabilities,
+`no-new-privileges`, and CPU, memory, and PID limits. Those controls are part of
+the deployment security boundary because the backend accepts untrusted source
+and invokes the native compiler.
 
 To run the same container setup in dev mode, build the `dev` target and expose
 Vite's dev-server port:
