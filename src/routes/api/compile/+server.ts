@@ -7,7 +7,7 @@ import type { RequestHandler } from './$types';
 
 const MAX_SOURCE_BYTES = Number(process.env.KRIOL_MAX_SOURCE_BYTES ?? 128 * 1024);
 const ENABLE_RATE_LIMIT = process.env.KRIOL_COMPILE_RATE_LIMIT !== 'false';
-const ALLOWED_ORIGINS = (process.env.KRIOL_ALLOWED_ORIGINS ?? 'https://play.kriol.dev,http://localhost:3000')
+const ALLOWED_ORIGINS = (process.env.KRIOL_ALLOWED_ORIGINS ?? 'https://play.kriol.dev,http://localhost:3000,http://127.0.0.1:3000')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
