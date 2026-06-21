@@ -73,7 +73,9 @@ deployment-friendly than `require-corp` when third-party resources or injected
 frames are present. Override these headers with
 `KRIOL_CROSS_ORIGIN_OPENER_POLICY`, `KRIOL_CROSS_ORIGIN_EMBEDDER_POLICY`, and
 `KRIOL_CROSS_ORIGIN_RESOURCE_POLICY` if a host needs stricter behavior.
-Filesystem operations are stubbed for now.
+The Docker production image starts `server.js`, a thin adapter-node wrapper that
+sets the same headers before serving static `/_app/immutable/*` assets such as
+worker chunks. Filesystem operations are stubbed for now.
 
 ## Compiler Shape
 

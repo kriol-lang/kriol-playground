@@ -49,13 +49,13 @@ COPY . .
 FROM build AS dev
 
 ENV HOST=0.0.0.0
-ENV PORT=5173
+ENV PORT=3000
 ENV KRIOL_COMPILE_QUEUE_SIZE=8
 ENV KRIOL_COMPILE_TIMEOUT_MS=10000
 ENV KRIOL_MAX_SOURCE_BYTES=131072
 ENV KRIOL_COMPILE_OUTPUT_LIMIT_BYTES=65536
 
-EXPOSE 5173
+EXPOSE 3000
 
 CMD ["npm", "run", "dev"]
 
@@ -91,6 +91,7 @@ COPY --from=build /opt/kriol /opt/kriol
 COPY --from=production-build /src/build /app/build
 COPY --from=production-build /src/node_modules /app/node_modules
 COPY --from=production-build /src/package.json /app/package.json
+COPY --from=production-build /src/server.js /app/server.js
 
 RUN chown -R app:app /app \
     && test -s "${KRIOL_VERSION_FILE}" \
@@ -102,4 +103,4 @@ USER app
 
 EXPOSE 3000
 
-CMD ["node", "build"]
+CMD ["node", "server.js"]
