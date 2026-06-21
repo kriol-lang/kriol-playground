@@ -6,8 +6,8 @@ type KriolState = {
 };
 
 const keywords = /^(fn|dipoz|inpristan|molda)\b/;
-const controlKeywords = /^(si|sinon|pa|nkuantu|para|kontinua|divolvi|sai|konfirma)\b/;
-const builtinFunctions = /^(mostra|mostran)\b/;
+const controlKeywords = /^(si|sinon|pa|nkuantu|para|kontinua|divolvi)\b/;
+const builtinFunctions = /^(mostra|mostran|toma|sai|konfirma)\b/;
 const types = /^(nter|num|textu|bool|i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|isize|usize)\b/;
 const booleans = /^(sin|nau)\b/;
 const typeIdentifiers = /^[A-Z][A-Za-z0-9_]*/;
