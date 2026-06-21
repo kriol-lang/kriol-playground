@@ -1,18 +1,15 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+import { crossOriginIsolationHeaders } from './src/lib/server/crossOriginIsolation';
 
-const crossOriginIsolationHeaders = {
-  'Cross-Origin-Opener-Policy': 'same-origin',
-  'Cross-Origin-Embedder-Policy': 'require-corp',
-  'Cross-Origin-Resource-Policy': 'same-origin'
-};
+const headers = crossOriginIsolationHeaders(process.env);
 
 export default defineConfig({
   plugins: [sveltekit()],
   server: {
-    headers: crossOriginIsolationHeaders
+    headers
   },
   preview: {
-    headers: crossOriginIsolationHeaders
+    headers
   }
 });

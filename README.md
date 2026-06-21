@@ -68,7 +68,12 @@ read, the worker blocks on a `SharedArrayBuffer` stdin channel and the UI polls
 shared stdout/stderr buffers plus stdin request state. The "Entrada padrão"
 prompt appears only while the program is waiting for a line. This requires
 cross-origin isolation, so the SvelteKit server and Vite dev/preview server set
-the required COOP/COEP/CORP headers. Filesystem operations are stubbed for now.
+COOP/COEP headers. The default COEP policy is `credentialless`, which is more
+deployment-friendly than `require-corp` when third-party resources or injected
+frames are present. Override these headers with
+`KRIOL_CROSS_ORIGIN_OPENER_POLICY`, `KRIOL_CROSS_ORIGIN_EMBEDDER_POLICY`, and
+`KRIOL_CROSS_ORIGIN_RESOURCE_POLICY` if a host needs stricter behavior.
+Filesystem operations are stubbed for now.
 
 ## Compiler Shape
 
