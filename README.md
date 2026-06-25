@@ -80,8 +80,8 @@ programs that read stdin, print to stdout/stderr, and exit. When WASI fd 0 is
 read, the worker blocks on a `SharedArrayBuffer` stdin channel and the UI polls
 shared stdout/stderr buffers plus stdin request state. The "Entrada padrão"
 prompt appears only while the program is waiting for a line. This requires
-cross-origin isolation, so the SvelteKit server and Vite dev/preview server set
-COOP/COEP headers. The default COEP policy is `require-corp`, which has the
+cross-origin isolation, so the production server wrapper and Vite dev/preview
+server set COOP/COEP headers. The default COEP policy is `require-corp`, which has the
 most consistent browser support for `SharedArrayBuffer` isolation. Override
 these headers with
 `KRIOL_CROSS_ORIGIN_OPENER_POLICY`, `KRIOL_CROSS_ORIGIN_EMBEDDER_POLICY`, and

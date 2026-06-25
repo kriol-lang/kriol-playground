@@ -94,6 +94,7 @@ COPY --from=build /opt/kriol /opt/kriol
 COPY --from=production-build /src/build /app/build
 COPY --from=production-build /src/node_modules /app/node_modules
 COPY --from=production-build /src/package.json /app/package.json
+COPY --from=production-build /src/cross-origin-isolation.js /app/cross-origin-isolation.js
 COPY --from=production-build /src/server.js /app/server.js
 
 RUN chown -R app:app /app \

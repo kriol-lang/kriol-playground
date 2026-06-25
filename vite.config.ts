@@ -1,6 +1,6 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
-import { crossOriginIsolationHeaders } from './src/lib/server/crossOriginIsolation';
+import { crossOriginIsolationHeaders } from './cross-origin-isolation.js';
 
 const headers = crossOriginIsolationHeaders(process.env);
 
