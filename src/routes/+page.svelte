@@ -24,8 +24,8 @@
   const OUTPUT_WRITE_INDEX = 1;
   const OUTPUT_DROPPED_BYTES = 2;
 
-  let source = `fn ola(textu nomi, bool na_kriolu) {
-  si na_kriolu {
+  let source = `fn ola(textu nomi, bool naKriolu) {
+  si naKriolu {
     mostran(f"👋 Olá {nomi}, ami nta programa na Kriol!");
   } sinon {
     mostran(f"👋 Hello {nomi}, I program in Kriol!");
