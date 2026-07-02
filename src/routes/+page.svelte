@@ -631,10 +631,13 @@ fn inisiu() {
 <style>
   .shell {
     min-height: 100vh;
+    min-height: 100svh;
     padding: 18px;
   }
 
   .topbar {
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -904,6 +907,7 @@ fn inisiu() {
   :global(.cm-editor) {
     height: 100%;
     min-height: 0;
+    min-width: 0;
   }
 
   :global(.cm-editor) {
@@ -914,21 +918,39 @@ fn inisiu() {
   }
 
   :global(.cm-scroller) {
-    overflow: auto !important;
+    overflow: scroll !important;
     height: 100%;
+    min-width: 0;
     -webkit-overflow-scrolling: touch;
-    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-family: var(--code-font) !important;
+    overscroll-behavior: contain;
     touch-action: pan-x pan-y;
   }
 
   :global(.cm-content) {
+    display: block;
     width: max-content;
     min-width: 100%;
     white-space: pre;
   }
 
   :global(.cm-line) {
+    width: max-content;
+    min-width: 100%;
     white-space: pre;
+  }
+
+  :global(.cm-selectionBackground),
+  :global(.cm-focused .cm-selectionBackground),
+  :global(.cm-line::selection),
+  :global(.cm-line span::selection) {
+    background: var(--selection-bg) !important;
+    color: var(--selection-text);
+  }
+
+  :global(.cm-content ::selection) {
+    background: var(--selection-bg);
+    color: var(--selection-text);
   }
 
   :global(.cm-gutters) {
@@ -1051,7 +1073,7 @@ fn inisiu() {
     border-radius: 8px;
     color: var(--text);
     background: var(--surface-muted);
-    font: 13px/1.5 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font: 13px/1.5 var(--code-font);
   }
 
   .stdin-row input:focus {
@@ -1185,30 +1207,71 @@ fn inisiu() {
 
   @media (max-width: 860px) {
     .shell {
+      min-height: 100svh;
       padding: 10px;
     }
 
     .topbar {
+      flex-wrap: wrap;
+      gap: 10px;
       margin-bottom: 10px;
+    }
+
+    .brand {
+      font-size: 21px;
+    }
+
+    .version-badge {
+      order: 3;
+      margin-right: 0;
+    }
+
+    .nav-actions {
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .icon-link {
+      width: 40px;
+      min-height: 40px;
+      justify-content: center;
+    }
+
+    .icon-link span {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     .workspace {
       grid-template-columns: 1fr;
+      gap: 12px;
       height: auto;
       min-height: auto;
     }
 
     .editor-pane {
-      max-height: 70vh;
+      min-height: min(620px, 72svh);
+      max-height: 780px;
+      padding: 10px;
     }
 
     .editor-frame {
-      min-height: 0;
+      min-height: min(460px, calc(72svh - 118px));
+      max-height: 620px;
     }
 
     .bar {
-      align-items: stretch;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      min-height: 0;
     }
 
     .actions {
@@ -1217,12 +1280,13 @@ fn inisiu() {
     }
 
     .side-pane {
-      min-height: 320px;
+      min-height: min(420px, 62svh);
       overflow: visible;
+      padding: 10px;
     }
 
     .panel {
-      max-height: 52vh;
+      max-height: 52svh;
     }
 
     .panel-actions {
@@ -1237,6 +1301,49 @@ fn inisiu() {
     .tool-button svg {
       width: 20px;
       height: 20px;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .shell {
+      padding: 8px;
+    }
+
+    .topbar {
+      align-items: center;
+    }
+
+    .version-badge {
+      max-width: calc(100vw - 16px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .editor-pane {
+      min-height: min(560px, 76svh);
+      max-height: 640px;
+    }
+
+    .editor-frame {
+      min-height: min(410px, calc(76svh - 122px));
+      max-height: 520px;
+    }
+
+    .pane-bar {
+      min-height: 40px;
+      padding: 0 10px;
+    }
+
+    :global(.cm-editor) {
+      font-size: 14px;
+    }
+
+    .stdin-row {
+      grid-template-columns: 1fr;
+    }
+
+    .stdin-send {
+      width: 100%;
     }
   }
 </style>
