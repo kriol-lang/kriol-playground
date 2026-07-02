@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { basicSetup } from 'codemirror';
-  import { EditorState } from '@codemirror/state';
+  import { Compartment, EditorState } from '@codemirror/state';
   import { EditorView, keymap } from '@codemirror/view';
   import { indentWithTab } from '@codemirror/commands';
   import { kriolLanguage } from '$lib/editor/kriolLanguage';
@@ -13,8 +13,10 @@
 
   let { value = $bindable(''), readonly = false }: Props = $props();
 
-  let host: HTMLDivElement;
-  let view: EditorView | null = null;
+  const readonlyCompartment = new Compartment();
+
+  let host = $state<HTMLDivElement>();
+  let view = $state<EditorView | null>(null);
   let applyingExternalValue = false;
 
   onMount(() => {
@@ -25,7 +27,7 @@
         extensions: [
           basicSetup,
           keymap.of([indentWithTab]),
-          EditorState.readOnly.of(readonly),
+          readonlyCompartment.of(EditorState.readOnly.of(readonly)),
           EditorView.updateListener.of((update) => {
             if (update.docChanged && !applyingExternalValue)
               value = update.state.doc.toString();
@@ -54,6 +56,15 @@
       }
     });
     applyingExternalValue = false;
+  });
+
+  $effect(() => {
+    if (!view)
+      return;
+
+    view.dispatch({
+      effects: readonlyCompartment.reconfigure(EditorState.readOnly.of(readonly))
+    });
   });
 
   onDestroy(() => {

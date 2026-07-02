@@ -24,7 +24,7 @@
   const OUTPUT_WRITE_INDEX = 1;
   const OUTPUT_DROPPED_BYTES = 2;
 
-  let source = `fn ola(textu nomi, bool naKriolu) {
+  let source = $state(`fn ola(textu nomi, bool naKriolu) {
   si naKriolu {
     mostran(f"👋 Olá {nomi}, ami nta programa na Kriol!");
   } sinon {
@@ -40,48 +40,52 @@ fn inisiu() {
   ola(nomi, sin);
   ola(nomi, nau);
 }
-`;
-  let status: CompileStatus = 'idle';
-  let result: CompileResponse | null = null;
-  let wasmUrl = '';
-  let wasmBytes: Uint8Array | null = null;
-  let runStatus: RunStatus = 'idle';
-  let runResult: WasiRunResult | null = null;
-  let runError = '';
-  let consoleStdout = '';
-  let consoleStderr = '';
-  let stdinValue = '';
-  let stdinPlaceholder = 'Valor para stdin';
-  let waitingForStdin = false;
-  let stdinControl: Int32Array | null = null;
-  let stdinData: Uint8Array | null = null;
-  let stdinInput: HTMLInputElement | null = null;
-  let stdinRequestCount = 0;
-  let stdoutControl: Int32Array | null = null;
-  let stdoutData: Uint8Array | null = null;
-  let stderrControl: Int32Array | null = null;
-  let stderrData: Uint8Array | null = null;
+`);
+  let status = $state<CompileStatus>('idle');
+  let result = $state<CompileResponse | null>(null);
+  let wasmUrl = $state('');
+  let wasmBytes = $state.raw<Uint8Array | null>(null);
+  let runStatus = $state<RunStatus>('idle');
+  let runResult = $state<WasiRunResult | null>(null);
+  let runError = $state('');
+  let consoleStdout = $state('');
+  let consoleStderr = $state('');
+  let stdinValue = $state('');
+  let stdinPlaceholder = $state('Valor para stdin');
+  let waitingForStdin = $state(false);
+  let stdinControl = $state.raw<Int32Array | null>(null);
+  let stdinData = $state.raw<Uint8Array | null>(null);
+  let stdinInput = $state<HTMLInputElement | null>(null);
+  let stdinRequestCount = $state(0);
+  let stdoutControl = $state.raw<Int32Array | null>(null);
+  let stdoutData = $state.raw<Uint8Array | null>(null);
+  let stderrControl = $state.raw<Int32Array | null>(null);
+  let stderrData = $state.raw<Uint8Array | null>(null);
   let stdoutDecoder = new TextDecoder();
   let stderrDecoder = new TextDecoder();
   let outputPoll: ReturnType<typeof setInterval> | null = null;
   let runWorker: Worker | null = null;
-  let infoDialog: HTMLDialogElement | null = null;
-  let theme: 'light' | 'dark' = 'light';
-  let compilerVersion = 'X.Y.Z';
+  let infoDialog = $state<HTMLDialogElement | null>(null);
+  let theme = $state<'light' | 'dark'>('light');
+  let compilerVersion = $state('X.Y.Z');
 
-  $: diagnostics = result?.diagnostics ?? [];
-  $: isCompiling = status === 'queued' || status === 'running';
-  $: canDownload = Boolean(result?.ok && wasmUrl);
-  $: canRun = Boolean(result?.ok && wasmBytes && runStatus !== 'running');
-  $: consoleTitle = diagnostics.length > 0
-    ? 'Diagnósticos'
-    : runError
-      ? 'Erro de execução'
-      : 'Consola';
-  $: consoleOutput = consoleStdout || '(sem saída padrão)';
-  $: statusLabel = translateStatus(status);
-  $: if (typeof document !== 'undefined')
+  let diagnostics = $derived(result?.diagnostics ?? []);
+  let isCompiling = $derived(status === 'queued' || status === 'running');
+  let canDownload = $derived(Boolean(result?.ok && wasmUrl));
+  let canRun = $derived(Boolean(result?.ok && wasmBytes && runStatus !== 'running'));
+  let consoleTitle = $derived(
+    diagnostics.length > 0
+      ? 'Diagnósticos'
+      : runError
+        ? 'Erro de execução'
+        : 'Consola'
+  );
+  let consoleOutput = $derived(consoleStdout || '(sem saída padrão)');
+  let statusLabel = $derived(translateStatus(status));
+
+  $effect(() => {
     document.documentElement.dataset.theme = theme;
+  });
 
   async function compile() {
     status = 'queued';
@@ -246,12 +250,14 @@ fn inisiu() {
     if (!waitingForStdin || !stdinControl || !stdinData)
       return;
 
+    const control = stdinControl;
+    const data = stdinData;
     const submitted = stdinValue;
     const encoder = new TextEncoder();
     const encoded = encoder.encode(`${submitted}\n`);
-    if (encoded.length > stdinData.length) {
+    if (encoded.length > data.length) {
       runStatus = 'error';
-      runError = `Entrada demasiado grande: limite de ${stdinData.length} bytes por linha.`;
+      runError = `Entrada demasiado grande: limite de ${data.length} bytes por linha.`;
       closeStdin();
       runWorker?.terminate();
       runWorker = null;
@@ -261,11 +267,11 @@ fn inisiu() {
 
     drainRuntimeOutput();
     echoStdin(submitted);
-    stdinData.fill(0);
-    stdinData.set(encoded);
-    Atomics.store(stdinControl, 1, encoded.length);
-    Atomics.store(stdinControl, 0, STDIN_READY);
-    Atomics.notify(stdinControl, 0);
+    data.fill(0);
+    data.set(encoded);
+    Atomics.store(control, 1, encoded.length);
+    Atomics.store(control, 0, STDIN_READY);
+    Atomics.notify(control, 0);
 
     stdinValue = '';
     stdinPlaceholder = 'Valor para stdin';
@@ -489,7 +495,7 @@ fn inisiu() {
         <span>GitHub</span>
       </a>
 
-      <button class="icon-button" type="button" aria-label="Toggle theme" on:click={toggleTheme}>
+      <button class="icon-button" type="button" aria-label="Toggle theme" onclick={toggleTheme}>
         {#if theme === 'light'}
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.05 8.05 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.14 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36 10.14 10.14 0 1 0 21.86 14.05 1 1 0 0 0 21.64 13Z" /></svg>
         {:else}
@@ -504,16 +510,16 @@ fn inisiu() {
       <div class="bar">
         <div class="title-row">
           <h1>Playground</h1>
-          <button class="info-button" type="button" aria-label="How the playground works" title="How the playground works" on:click={openInfoDialog}>
+          <button class="info-button" type="button" aria-label="How the playground works" title="How the playground works" onclick={openInfoDialog}>
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16.001A8 8 0 0 1 12 20Zm0-9a1 1 0 0 0-1 1v4a1 1 0 1 0 2 0v-4a1 1 0 0 0-1-1Zm.38-3.92a1 1 0 0 0-.76 0 1 1 0 0 0-.33.21 1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0A1 1 0 0 0 13 8a1 1 0 0 0-.62-.92Z" /></svg>
           </button>
         </div>
 
         <div class="actions">
-          <button class="primary" type="button" disabled={isCompiling || runStatus === 'running'} on:click={compile}>
+          <button class="primary" type="button" disabled={isCompiling || runStatus === 'running'} onclick={compile}>
             {isCompiling ? 'A compilar...' : 'Compilar'}
           </button>
-          <button class="secondary" type="button" disabled={!canRun} on:click={runProgram}>
+          <button class="secondary" type="button" disabled={!canRun} onclick={runProgram}>
             {runStatus === 'running' ? 'A executar...' : 'Executar'}
           </button>
         </div>
@@ -544,18 +550,25 @@ fn inisiu() {
           <h2>{consoleTitle}</h2>
           <div class="panel-actions">
             {#if runStatus === 'running'}
-              <button class="tool-button danger" type="button" aria-label="Parar execução" title="Parar execução" on:click={() => stopRun()}>
+              <button class="tool-button danger" type="button" aria-label="Parar execução" title="Parar execução" onclick={() => stopRun()}>
                 <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" /></svg>
               </button>
             {/if}
-            <button class="tool-button" type="button" aria-label="Limpar consola" title="Limpar consola" on:click={clearConsole}>
+            <button class="tool-button" type="button" aria-label="Limpar consola" title="Limpar consola" onclick={clearConsole}>
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 3a1 1 0 0 0-1 1v1H4a1 1 0 1 0 0 2h1v12a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V7h1a1 1 0 1 0 0-2h-4V4a1 1 0 0 0-1-1H9Zm1 2h4v1h-4V5Zm7 2v12a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7h10Zm-7 3a1 1 0 0 0-1 1v5a1 1 0 1 0 2 0v-5a1 1 0 0 0-1-1Zm4 0a1 1 0 0 0-1 1v5a1 1 0 1 0 2 0v-5a1 1 0 0 0-1-1Z" /></svg>
             </button>
           </div>
         </div>
 
         {#if waitingForStdin}
-          <form class:stdin-active={waitingForStdin} class="stdin-panel" on:submit|preventDefault={sendStdin}>
+          <form
+            class:stdin-active={waitingForStdin}
+            class="stdin-panel"
+            onsubmit={(event) => {
+              event.preventDefault();
+              sendStdin();
+            }}
+          >
             <label for="stdin">Entrada padrão</label>
             <div class="stdin-row">
               <input id="stdin" bind:this={stdinInput} bind:value={stdinValue} placeholder={stdinPlaceholder} spellcheck="false" disabled={!waitingForStdin} autocomplete="off" />
@@ -598,10 +611,10 @@ fn inisiu() {
     </aside>
   </section>
 
-  <dialog class="info-dialog" bind:this={infoDialog} aria-labelledby="playground-info-title" on:click={(event) => event.target === infoDialog && closeInfoDialog()}>
+  <dialog class="info-dialog" bind:this={infoDialog} aria-labelledby="playground-info-title" onclick={(event) => event.target === infoDialog && closeInfoDialog()}>
     <div class="dialog-header">
       <h2 id="playground-info-title">Como/aonde isto executa?</h2>
-      <button class="tool-button" type="button" aria-label="Close" title="Close" on:click={closeInfoDialog}>
+      <button class="tool-button" type="button" aria-label="Close" title="Close" onclick={closeInfoDialog}>
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m13.41 12 6.3-6.29a1 1 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1 1 0 1 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 1.42 1.42l6.29-6.3 6.29 6.3a1 1 0 0 0 1.42-1.42L13.41 12Z" /></svg>
       </button>
     </div>
@@ -767,20 +780,10 @@ fn inisiu() {
     gap: 8px;
   }
 
-  .eyebrow,
   h1,
   h2,
   p {
     margin: 0;
-  }
-
-  .eyebrow {
-    margin-bottom: 6px;
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0;
-    text-transform: uppercase;
   }
 
   h1 {
