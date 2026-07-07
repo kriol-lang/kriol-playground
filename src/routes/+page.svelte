@@ -583,7 +583,7 @@ fn inisiu() {
           <div class="console-wrap">
             <pre class="console">{consoleOutput}</pre>
             {#if waitingForStdin}
-              <span class="stdin-waiting">waiting stdin...</span>
+              <span class="stdin-waiting">esperando entrada...</span>
             {/if}
           </div>
           {#if consoleStderr}
