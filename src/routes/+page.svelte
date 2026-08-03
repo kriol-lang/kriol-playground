@@ -923,7 +923,8 @@ fn inisiu() {
     min-width: 0;
     -webkit-overflow-scrolling: touch;
     font-family: var(--code-font) !important;
-    overscroll-behavior: contain;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
     touch-action: pan-x pan-y;
   }
 
