@@ -1,7 +1,7 @@
 ARG DEBIAN_TAG=trixie
 ARG LLVM_VERSION=20
-ARG KRIOL_TAG=v1.9.2-alpha+build1
-ARG KRIOL_SHA256="ef62d6a7bf53e784196723ce2d195123f243b3fc81b4f319dc8d71f5873981fc"
+ARG KRIOL_TAG=v1.10.0-alpha+build2
+ARG KRIOL_SHA256="57af4888bcbb4f062d551c346208db66d0dcba46619f77c7c51f8dcf9f572d8c"
 
 # kriol's release binary (built on Ubuntu) only needs glibc up to 2.38, so it
 # runs fine here despite this stage being Debian — but the release still
